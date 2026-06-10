@@ -194,10 +194,19 @@ app.get('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
   if (!skill) {
     return res.status(404).json({ error: '技能不存在' });
   }
+  if (skill.type !== 'teach') {
+    return res.json([]);
+  }
 
-  let result = portfolios.filter(p =>
-    p.skillId === skillId && p.userId === skill.userId
-  );
+  let result = portfolios
+    .filter(p =>
+      p.skillId === skillId &&
+      p.userId === skill.userId
+    )
+    .map(p => ({
+      ...p,
+      skillName: skill.name || '未知技能'
+    }));
 
   if (skill.userId !== req.user.id) {
     result = result.filter(p => p.isPublic);
@@ -239,7 +248,10 @@ app.post('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
   };
   portfolios.push(newPortfolio);
   writeJson('skillPortfolios.json', portfolios);
-  res.json(newPortfolio);
+  res.json({
+    ...newPortfolio,
+    skillName: skill.name || '未知技能'
+  });
 });
 
 app.put('/api/portfolios/:id', authMiddleware, (req, res) => {
@@ -263,10 +275,16 @@ app.put('/api/portfolios/:id', authMiddleware, (req, res) => {
   if (skill && skill.userId !== existingPortfolio.userId) {
     return res.status(400).json({ error: '数据异常，作品集归属不一致' });
   }
+  if (skill && skill.type !== 'teach') {
+    return res.status(400).json({ error: '仅可教技能支持作品集' });
+  }
 
   portfolios[index] = { ...existingPortfolio, ...updateData };
   writeJson('skillPortfolios.json', portfolios);
-  res.json(portfolios[index]);
+  res.json({
+    ...portfolios[index],
+    skillName: skill?.name || '未知技能'
+  });
 });
 
 app.delete('/api/portfolios/:id', authMiddleware, (req, res) => {
@@ -283,6 +301,9 @@ app.delete('/api/portfolios/:id', authMiddleware, (req, res) => {
   const skill = skills.find(s => s.id === portfolio.skillId);
   if (skill && skill.userId !== portfolio.userId) {
     return res.status(400).json({ error: '数据异常，作品集归属不一致' });
+  }
+  if (skill && skill.type !== 'teach') {
+    return res.status(400).json({ error: '仅可教技能支持作品集' });
   }
 
   const filtered = portfolios.filter(p => p.id !== req.params.id);
@@ -603,19 +624,20 @@ app.get('/api/users/:userId', (req, res) => {
 
   const { password: _, ...userWithoutPassword } = user;
   const userSkills = skills.filter(s => s.userId === userId);
-  const userSkillMap = {};
-  userSkills.forEach(s => { userSkillMap[s.id] = s.name; });
-  const userSkillIds = userSkills.map(s => s.id);
+  const userTeachSkills = userSkills.filter(s => s.type === 'teach');
+  const userTeachSkillMap = {};
+  userTeachSkills.forEach(s => { userTeachSkillMap[s.id] = s.name; });
+  const userTeachSkillIds = userTeachSkills.map(s => s.id);
 
   const userPortfolios = portfolios
     .filter(p =>
-      userSkillIds.includes(p.skillId) &&
+      userTeachSkillIds.includes(p.skillId) &&
       p.userId === userId &&
       p.isPublic
     )
     .map(p => ({
       ...p,
-      skillName: userSkillMap[p.skillId] || '未知技能'
+      skillName: userTeachSkillMap[p.skillId] || '未知技能'
     }));
 
   res.json({
