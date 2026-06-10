@@ -74,7 +74,10 @@
               >
                 <div class="pf-header">
                   <span class="pf-title">{{ pf.title }}</span>
-                  <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                  <div class="pf-tag-group">
+                    <el-tag size="small" type="info" effect="plain">{{ pf.skillName || '未知技能' }}</el-tag>
+                    <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                  </div>
                 </div>
                 <div v-if="pf.link" class="pf-link">
                   <el-icon><Link /></el-icon>
@@ -114,6 +117,7 @@
         <div class="detail-header">
           <h3 class="detail-title">{{ selectedPortfolio.title }}</h3>
           <div class="detail-tags">
+            <el-tag type="info" effect="plain">{{ selectedPortfolio.skillName || '未知技能' }}</el-tag>
             <el-tag type="warning">{{ selectedPortfolio.teachingStage }}</el-tag>
             <el-tag type="success">公开</el-tag>
           </div>
@@ -179,7 +183,10 @@
             >
               <div class="ep-header">
                 <span class="ep-title">{{ pf.title }}</span>
-                <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                <div class="ep-tag-group">
+                  <el-tag size="small" type="info" effect="plain">{{ pf.skillName || '未知技能' }}</el-tag>
+                  <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                </div>
               </div>
               <div v-if="pf.link" class="ep-link">
                 <el-icon><Link /></el-icon>
@@ -476,7 +483,7 @@ function showPortfolioDetail(match, portfolio) {
 
 .pf-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 6px;
   gap: 8px;
@@ -486,6 +493,13 @@ function showPortfolioDetail(match, portfolio) {
   font-weight: 600;
   color: #333;
   font-size: 14px;
+}
+
+.pf-tag-group,
+.ep-tag-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .pf-link {
@@ -658,7 +672,7 @@ function showPortfolioDetail(match, portfolio) {
 .ep-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 6px;
   gap: 8px;
 }

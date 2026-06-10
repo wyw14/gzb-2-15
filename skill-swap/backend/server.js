@@ -195,7 +195,9 @@ app.get('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
     return res.status(404).json({ error: '技能不存在' });
   }
 
-  let result = portfolios.filter(p => p.skillId === skillId);
+  let result = portfolios.filter(p =>
+    p.skillId === skillId && p.userId === skill.userId
+  );
 
   if (skill.userId !== req.user.id) {
     result = result.filter(p => p.isPublic);
@@ -215,6 +217,9 @@ app.post('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
   }
   if (skill.userId !== req.user.id) {
     return res.status(403).json({ error: '无权限操作' });
+  }
+  if (skill.type !== 'teach') {
+    return res.status(400).json({ error: '仅可教技能支持添加作品集' });
   }
   if (!title) {
     return res.status(400).json({ error: '请填写案例标题' });
@@ -239,6 +244,7 @@ app.post('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
 
 app.put('/api/portfolios/:id', authMiddleware, (req, res) => {
   const portfolios = readJson('skillPortfolios.json');
+  const skills = readJson('skills.json');
   const index = portfolios.findIndex(p => p.id === req.params.id);
   if (index === -1) {
     return res.status(404).json({ error: '案例不存在' });
@@ -247,19 +253,36 @@ app.put('/api/portfolios/:id', authMiddleware, (req, res) => {
     return res.status(403).json({ error: '无权限修改' });
   }
 
-  portfolios[index] = { ...portfolios[index], ...req.body };
+  const updateData = { ...req.body };
+  delete updateData.skillId;
+  delete updateData.userId;
+  delete updateData.createdAt;
+
+  const existingPortfolio = portfolios[index];
+  const skill = skills.find(s => s.id === existingPortfolio.skillId);
+  if (skill && skill.userId !== existingPortfolio.userId) {
+    return res.status(400).json({ error: '数据异常，作品集归属不一致' });
+  }
+
+  portfolios[index] = { ...existingPortfolio, ...updateData };
   writeJson('skillPortfolios.json', portfolios);
   res.json(portfolios[index]);
 });
 
 app.delete('/api/portfolios/:id', authMiddleware, (req, res) => {
   const portfolios = readJson('skillPortfolios.json');
+  const skills = readJson('skills.json');
   const portfolio = portfolios.find(p => p.id === req.params.id);
   if (!portfolio) {
     return res.status(404).json({ error: '案例不存在' });
   }
   if (portfolio.userId !== req.user.id) {
     return res.status(403).json({ error: '无权限删除' });
+  }
+
+  const skill = skills.find(s => s.id === portfolio.skillId);
+  if (skill && skill.userId !== portfolio.userId) {
+    return res.status(400).json({ error: '数据异常，作品集归属不一致' });
   }
 
   const filtered = portfolios.filter(p => p.id !== req.params.id);
@@ -286,11 +309,24 @@ app.get('/api/matches', authMiddleware, (req, res) => {
   }
 
   matches = matches.map(match => {
-    const userTeachSkills = skills.filter(s => s.userId === match.userId && s.type === 'teach');
-    const userSkillIds = userTeachSkills.map(s => s.id);
-    const userPortfolios = portfolios.filter(p =>
-      userSkillIds.includes(p.skillId) && p.isPublic
+    const userTeachSkills = skills.filter(
+      s => s.userId === match.userId && s.type === 'teach'
     );
+    const userSkillMap = {};
+    userTeachSkills.forEach(s => { userSkillMap[s.id] = s.name; });
+    const userSkillIds = userTeachSkills.map(s => s.id);
+
+    const userPortfolios = portfolios
+      .filter(p =>
+        userSkillIds.includes(p.skillId) &&
+        p.userId === match.userId &&
+        p.isPublic
+      )
+      .map(p => ({
+        ...p,
+        skillName: userSkillMap[p.skillId] || '未知技能'
+      }));
+
     return {
       ...match,
       portfolios: userPortfolios
@@ -559,15 +595,28 @@ app.get('/api/users/:userId', (req, res) => {
   const users = readJson('users.json');
   const skills = readJson('skills.json');
   const portfolios = readJson('skillPortfolios.json');
-  const user = users.find(u => u.id === req.params.userId);
+  const userId = req.params.userId;
+  const user = users.find(u => u.id === userId);
   if (!user) {
     return res.status(404).json({ error: '用户不存在' });
   }
 
   const { password: _, ...userWithoutPassword } = user;
-  const userSkills = skills.filter(s => s.userId === req.params.userId);
+  const userSkills = skills.filter(s => s.userId === userId);
+  const userSkillMap = {};
+  userSkills.forEach(s => { userSkillMap[s.id] = s.name; });
   const userSkillIds = userSkills.map(s => s.id);
-  const userPortfolios = portfolios.filter(p => userSkillIds.includes(p.skillId) && p.isPublic);
+
+  const userPortfolios = portfolios
+    .filter(p =>
+      userSkillIds.includes(p.skillId) &&
+      p.userId === userId &&
+      p.isPublic
+    )
+    .map(p => ({
+      ...p,
+      skillName: userSkillMap[p.skillId] || '未知技能'
+    }));
 
   res.json({
     ...userWithoutPassword,

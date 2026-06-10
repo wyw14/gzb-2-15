@@ -93,7 +93,10 @@
             <div v-for="pf in otherPortfolios" :key="pf.id" class="chat-portfolio-item">
               <div class="cp-header">
                 <span class="cp-title">{{ pf.title }}</span>
-                <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                <div class="cp-tag-group">
+                  <el-tag size="small" type="info" effect="plain">{{ pf.skillName || getSkillName(pf.skillId) || '未知技能' }}</el-tag>
+                  <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                </div>
               </div>
               <div v-if="pf.link" class="cp-link">
                 <el-icon><Link /></el-icon>
@@ -181,6 +184,11 @@ async function selectConversation(userId) {
 
 function openExchangeDialog() {
   showExchangeDialog.value = true
+}
+
+function getSkillName(skillId) {
+  const skill = otherTeachSkills.value.find(s => s.id === skillId)
+  return skill?.name || ''
 }
 
 async function loadMessages(userId) {
@@ -431,7 +439,7 @@ async function createExchange() {
 .cp-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 6px;
   gap: 8px;
 }
@@ -440,6 +448,12 @@ async function createExchange() {
   font-weight: 600;
   color: #333;
   font-size: 14px;
+}
+
+.cp-tag-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .cp-link {

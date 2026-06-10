@@ -69,10 +69,8 @@
               <div class="portfolio-card-header">
                 <span class="pf-title">{{ pf.title }}</span>
                 <div class="pf-tags">
+                  <el-tag size="small" type="info" effect="plain">{{ pf.skillName || getSkillName(pf.skillId) || '未知技能' }}</el-tag>
                   <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
-                  <span v-if="getSkillName(pf.skillId)" class="pf-skill-name">
-                    {{ getSkillName(pf.skillId) }}
-                  </span>
                 </div>
               </div>
               <div v-if="pf.link" class="pf-link">
