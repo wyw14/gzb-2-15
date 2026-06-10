@@ -40,7 +40,11 @@ export const skillAPI = {
   createSkill: (data) => api.post('/skills', data),
   updateSkill: (id, data) => api.put(`/skills/${id}`, data),
   deleteSkill: (id) => api.delete(`/skills/${id}`),
-  getCategories: () => api.get('/skill-categories')
+  getCategories: () => api.get('/skill-categories'),
+  getPortfolios: (skillId) => api.get(`/skills/${skillId}/portfolios`),
+  createPortfolio: (skillId, data) => api.post(`/skills/${skillId}/portfolios`, data),
+  updatePortfolio: (id, data) => api.put(`/portfolios/${id}`, data),
+  deletePortfolio: (id) => api.delete(`/portfolios/${id}`)
 }
 
 export const matchAPI = {

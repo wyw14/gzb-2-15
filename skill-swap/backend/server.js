@@ -185,9 +185,92 @@ app.delete('/api/skills/:id', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
+  const portfolios = readJson('skillPortfolios.json');
+  const skills = readJson('skills.json');
+  const { skillId } = req.params;
+  const skill = skills.find(s => s.id === skillId);
+
+  if (!skill) {
+    return res.status(404).json({ error: '技能不存在' });
+  }
+
+  let result = portfolios.filter(p => p.skillId === skillId);
+
+  if (skill.userId !== req.user.id) {
+    result = result.filter(p => p.isPublic);
+  }
+
+  res.json(result);
+});
+
+app.post('/api/skills/:skillId/portfolios', authMiddleware, (req, res) => {
+  const { title, link, description, teachingStage, isPublic } = req.body;
+  const { skillId } = req.params;
+  const skills = readJson('skills.json');
+  const skill = skills.find(s => s.id === skillId);
+
+  if (!skill) {
+    return res.status(404).json({ error: '技能不存在' });
+  }
+  if (skill.userId !== req.user.id) {
+    return res.status(403).json({ error: '无权限操作' });
+  }
+  if (!title) {
+    return res.status(400).json({ error: '请填写案例标题' });
+  }
+
+  const portfolios = readJson('skillPortfolios.json');
+  const newPortfolio = {
+    id: uuidv4(),
+    skillId,
+    userId: req.user.id,
+    title: title || '',
+    link: link || '',
+    description: description || '',
+    teachingStage: teachingStage || '入门',
+    isPublic: isPublic !== undefined ? isPublic : true,
+    createdAt: new Date().toISOString()
+  };
+  portfolios.push(newPortfolio);
+  writeJson('skillPortfolios.json', portfolios);
+  res.json(newPortfolio);
+});
+
+app.put('/api/portfolios/:id', authMiddleware, (req, res) => {
+  const portfolios = readJson('skillPortfolios.json');
+  const index = portfolios.findIndex(p => p.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: '案例不存在' });
+  }
+  if (portfolios[index].userId !== req.user.id) {
+    return res.status(403).json({ error: '无权限修改' });
+  }
+
+  portfolios[index] = { ...portfolios[index], ...req.body };
+  writeJson('skillPortfolios.json', portfolios);
+  res.json(portfolios[index]);
+});
+
+app.delete('/api/portfolios/:id', authMiddleware, (req, res) => {
+  const portfolios = readJson('skillPortfolios.json');
+  const portfolio = portfolios.find(p => p.id === req.params.id);
+  if (!portfolio) {
+    return res.status(404).json({ error: '案例不存在' });
+  }
+  if (portfolio.userId !== req.user.id) {
+    return res.status(403).json({ error: '无权限删除' });
+  }
+
+  const filtered = portfolios.filter(p => p.id !== req.params.id);
+  writeJson('skillPortfolios.json', filtered);
+  res.json({ success: true });
+});
+
 app.get('/api/matches', authMiddleware, (req, res) => {
   const users = readJson('users.json');
   const skills = readJson('skills.json');
+  const portfolios = readJson('skillPortfolios.json');
   const { minScore, category } = req.query;
 
   let matches = findMatchesForUser(req.user.id, users, skills);
@@ -201,6 +284,18 @@ app.get('/api/matches', authMiddleware, (req, res) => {
       m.matchedSkills.iCanLearn.some(s => s.includes(category))
     );
   }
+
+  matches = matches.map(match => {
+    const userTeachSkills = skills.filter(s => s.userId === match.userId && s.type === 'teach');
+    const userSkillIds = userTeachSkills.map(s => s.id);
+    const userPortfolios = portfolios.filter(p =>
+      userSkillIds.includes(p.skillId) && p.isPublic
+    );
+    return {
+      ...match,
+      portfolios: userPortfolios
+    };
+  });
 
   res.json(matches);
 });
@@ -463,6 +558,7 @@ app.get('/api/skill-categories', (req, res) => {
 app.get('/api/users/:userId', (req, res) => {
   const users = readJson('users.json');
   const skills = readJson('skills.json');
+  const portfolios = readJson('skillPortfolios.json');
   const user = users.find(u => u.id === req.params.userId);
   if (!user) {
     return res.status(404).json({ error: '用户不存在' });
@@ -470,9 +566,13 @@ app.get('/api/users/:userId', (req, res) => {
 
   const { password: _, ...userWithoutPassword } = user;
   const userSkills = skills.filter(s => s.userId === req.params.userId);
+  const userSkillIds = userSkills.map(s => s.id);
+  const userPortfolios = portfolios.filter(p => userSkillIds.includes(p.skillId) && p.isPublic);
+
   res.json({
     ...userWithoutPassword,
-    skills: userSkills
+    skills: userSkills,
+    portfolios: userPortfolios
   });
 });
 

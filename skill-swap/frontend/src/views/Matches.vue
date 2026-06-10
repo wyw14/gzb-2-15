@@ -63,6 +63,31 @@
             </div>
           </div>
 
+          <div v-if="match.portfolios && match.portfolios.length > 0" class="portfolio-section">
+            <h4 class="column-title portfolio-title">📁 作品集证明</h4>
+            <div class="portfolio-preview">
+              <div
+                v-for="pf in match.portfolios.slice(0, 3)"
+                :key="pf.id"
+                class="portfolio-preview-item"
+                @click="showPortfolioDetail(match, pf)"
+              >
+                <div class="pf-header">
+                  <span class="pf-title">{{ pf.title }}</span>
+                  <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+                </div>
+                <div v-if="pf.link" class="pf-link">
+                  <el-icon><Link /></el-icon>
+                  <span>{{ pf.link }}</span>
+                </div>
+                <div v-if="pf.description" class="pf-desc">{{ pf.description }}</div>
+              </div>
+              <div v-if="match.portfolios.length > 3" class="portfolio-more">
+                还有 {{ match.portfolios.length - 3 }} 个案例...
+              </div>
+            </div>
+          </div>
+
           <div class="match-actions">
             <el-button @click="goToProfile(match.userId)">
               <el-icon><User /></el-icon>查看主页
@@ -71,7 +96,7 @@
               <el-icon><ChatDotRound /></el-icon>开始聊天
             </el-button>
             <el-button type="success" @click="createExchange(match)">
-              <el-icon><Handshake /></el-icon>发起交换
+              <el-icon><Promotion /></el-icon>发起交换
             </el-button>
           </div>
         </div>
@@ -83,6 +108,95 @@
         </template>
       </el-empty>
     </div>
+
+    <el-dialog v-model="showPortfolioDialog" title="作品集详情" width="600px">
+      <div v-if="selectedPortfolio" class="portfolio-detail">
+        <div class="detail-header">
+          <h3 class="detail-title">{{ selectedPortfolio.title }}</h3>
+          <div class="detail-tags">
+            <el-tag type="warning">{{ selectedPortfolio.teachingStage }}</el-tag>
+            <el-tag type="success">公开</el-tag>
+          </div>
+        </div>
+        <div v-if="selectedPortfolio.link" class="detail-link">
+          <el-icon><Link /></el-icon>
+          <a :href="selectedPortfolio.link" target="_blank">{{ selectedPortfolio.link }}</a>
+        </div>
+        <div v-if="selectedPortfolio.description" class="detail-desc">
+          <h4>案例说明</h4>
+          <p>{{ selectedPortfolio.description }}</p>
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="showExchangeDialog" title="发起技能交换" width="600px">
+      <div v-if="currentMatch" class="exchange-confirm">
+        <div class="exchange-users">
+          <el-avatar :src="currentMatch.user.avatar" :size="56" />
+          <div class="exchange-user-info">
+            <div class="exchange-username">{{ currentMatch.user.username }}</div>
+            <div class="exchange-score">
+              <el-rate :model-value="currentMatch.user.rating" disabled size="small" />
+              <span>{{ currentMatch.user.rating }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="exchange-skills">
+          <div class="exchange-skill-col">
+            <span class="label">你将教授:</span>
+            <div class="skills-tags">
+              <span
+                v-for="skill in currentMatch.matchedSkills.iCanTeach"
+                :key="skill"
+                class="skill-tag skill-teach"
+              >
+                {{ skill }}
+              </span>
+            </div>
+          </div>
+          <div class="exchange-skill-col">
+            <span class="label">你将学习:</span>
+            <div class="skills-tags">
+              <span
+                v-for="skill in currentMatch.matchedSkills.iCanLearn"
+                :key="skill"
+                class="skill-tag skill-learn"
+              >
+                {{ skill }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentMatch.portfolios && currentMatch.portfolios.length > 0" class="exchange-portfolios">
+          <h4 class="subsection-title">📁 对方的作品集证明（{{ currentMatch.portfolios.length }}个案例）</h4>
+          <div class="exchange-portfolio-list">
+            <div
+              v-for="pf in currentMatch.portfolios"
+              :key="pf.id"
+              class="exchange-portfolio-item"
+            >
+              <div class="ep-header">
+                <span class="ep-title">{{ pf.title }}</span>
+                <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+              </div>
+              <div v-if="pf.link" class="ep-link">
+                <el-icon><Link /></el-icon>
+                <a :href="pf.link" target="_blank">{{ pf.link }}</a>
+              </div>
+              <div v-if="pf.description" class="ep-desc">{{ pf.description }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showExchangeDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmExchange" :loading="exchanging">
+          确认发起交换
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -91,11 +205,16 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { matchAPI, skillAPI, exchangeAPI } from '../api'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, User, ChatDotRound, Switch, Handshake } from '@element-plus/icons-vue'
+import { Search, Refresh, User, ChatDotRound, Switch, Promotion, Link } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const matches = ref([])
 const categories = ref([])
+const showPortfolioDialog = ref(false)
+const selectedPortfolio = ref(null)
+const showExchangeDialog = ref(false)
+const currentMatch = ref(null)
+const exchanging = ref(false)
 const filters = ref({
   keyword: '',
   category: '',
@@ -151,18 +270,33 @@ function goToChat(userId) {
 }
 
 async function createExchange(match) {
+  currentMatch.value = match
+  showExchangeDialog.value = true
+}
+
+async function confirmExchange() {
+  if (!currentMatch.value) return
   try {
+    exchanging.value = true
     await exchangeAPI.createExchange({
-      partnerId: match.userId,
+      partnerId: currentMatch.value.userId,
       skills: {
-        teach: match.matchedSkills.iCanTeach,
-        learn: match.matchedSkills.iCanLearn
+        teach: currentMatch.value.matchedSkills.iCanTeach,
+        learn: currentMatch.value.matchedSkills.iCanLearn
       }
     })
     ElMessage.success('交换请求已发送')
+    showExchangeDialog.value = false
   } catch (e) {
     ElMessage.error('发起交换失败')
+  } finally {
+    exchanging.value = false
   }
+}
+
+function showPortfolioDetail(match, portfolio) {
+  selectedPortfolio.value = portfolio
+  showPortfolioDialog.value = true
 }
 </script>
 
@@ -307,5 +441,259 @@ async function createExchange(match) {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.portfolio-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  border: 1px dashed #e0e0e0;
+}
+
+.portfolio-title {
+  margin-bottom: 12px;
+}
+
+.portfolio-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portfolio-preview-item {
+  padding: 12px;
+  background: #f5f7ff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.portfolio-preview-item:hover {
+  background: #e8ebff;
+  transform: translateX(4px);
+}
+
+.pf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.pf-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.pf-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #667eea;
+  margin-bottom: 4px;
+}
+
+.pf-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.pf-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.portfolio-more {
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+  padding: 8px;
+}
+
+.portfolio-detail .detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.portfolio-detail .detail-title {
+  margin: 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.portfolio-detail .detail-tags {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.portfolio-detail .detail-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f5f7ff;
+  border-radius: 8px;
+}
+
+.portfolio-detail .detail-link a {
+  color: #667eea;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.portfolio-detail .detail-link a:hover {
+  text-decoration: underline;
+}
+
+.portfolio-detail .detail-desc h4 {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+  color: #333;
+}
+
+.portfolio-detail .detail-desc p {
+  margin: 0;
+  color: #666;
+  line-height: 1.8;
+}
+
+.exchange-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.exchange-users {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 12px;
+}
+
+.exchange-user-info {
+  flex: 1;
+}
+
+.exchange-username {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.exchange-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #ff9800;
+  font-weight: 600;
+}
+
+.exchange-skills {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 12px;
+}
+
+.exchange-skill-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exchange-skill-col .label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+}
+
+.exchange-portfolios {
+  padding: 16px;
+  background: #f5f7ff;
+  border-radius: 12px;
+  border: 1px dashed #c5cae9;
+}
+
+.exchange-portfolios .subsection-title {
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+.exchange-portfolio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.exchange-portfolio-item {
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+}
+
+.ep-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.ep-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.ep-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #667eea;
+  margin-bottom: 4px;
+}
+
+.ep-link a {
+  color: #667eea;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 350px;
+}
+
+.ep-link a:hover {
+  text-decoration: underline;
+}
+
+.ep-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
 }
 </style>

@@ -34,8 +34,8 @@
           <el-avatar :src="currentUser.avatar" :size="40" />
           <span class="chat-username">{{ currentUser.username }}</span>
           <div class="header-actions">
-            <el-button type="primary" size="small" @click="showExchangeDialog = true">
-              <el-icon><Handshake /></el-icon>发起交换
+            <el-button type="primary" size="small" @click="openExchangeDialog">
+              <el-icon><Promotion /></el-icon>发起交换
             </el-button>
           </div>
         </div>
@@ -72,19 +72,38 @@
       </div>
     </div>
 
-    <el-dialog v-model="showExchangeDialog" title="发起技能交换" width="500px">
-      <el-form :model="exchangeForm" label-position="top">
-        <el-form-item label="你想教授的技能">
-          <el-select v-model="exchangeForm.teachSkill" placeholder="选择你可以教的技能" style="width: 100%">
-            <el-option v-for="s in myTeachSkills" :key="s.id" :label="s.name" :value="s.name" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="你想学习的技能">
-          <el-select v-model="exchangeForm.learnSkill" placeholder="选择你想要学习的技能" style="width: 100%">
-            <el-option v-for="s in otherTeachSkills" :key="s.id" :label="s.name" :value="s.name" />
-          </el-select>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="showExchangeDialog" title="发起技能交换" width="600px">
+      <div class="exchange-dialog-content">
+        <el-form :model="exchangeForm" label-position="top">
+          <el-form-item label="你想教授的技能">
+            <el-select v-model="exchangeForm.teachSkill" placeholder="选择你可以教的技能" style="width: 100%">
+              <el-option v-for="s in myTeachSkills" :key="s.id" :label="s.name" :value="s.name" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="你想学习的技能">
+            <el-select v-model="exchangeForm.learnSkill" placeholder="选择你想要学习的技能" style="width: 100%">
+              <el-option v-for="s in otherTeachSkills" :key="s.id" :label="s.name" :value="s.name" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+
+        <div v-if="otherPortfolios && otherPortfolios.length > 0" class="chat-portfolios">
+          <h4 class="subsection-title">📁 对方的作品集证明（{{ otherPortfolios.length }}个案例）</h4>
+          <div class="chat-portfolio-list">
+            <div v-for="pf in otherPortfolios" :key="pf.id" class="chat-portfolio-item">
+              <div class="cp-header">
+                <span class="cp-title">{{ pf.title }}</span>
+                <el-tag size="small" type="warning">{{ pf.teachingStage }}</el-tag>
+              </div>
+              <div v-if="pf.link" class="cp-link">
+                <el-icon><Link /></el-icon>
+                <a :href="pf.link" target="_blank">{{ pf.link }}</a>
+              </div>
+              <div v-if="pf.description" class="cp-desc">{{ pf.description }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="showExchangeDialog = false">取消</el-button>
         <el-button type="primary" @click="createExchange">确认发起</el-button>
@@ -100,7 +119,7 @@ import { messageAPI, skillAPI, exchangeAPI, authAPI } from '../api'
 import { useUserStore } from '../stores/user'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
-import { ChatDotRound, Promotion, Handshake } from '@element-plus/icons-vue'
+import { ChatDotRound, Promotion, Link } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,6 +136,7 @@ const messagesContainer = ref(null)
 const showExchangeDialog = ref(false)
 const myTeachSkills = ref([])
 const otherTeachSkills = ref([])
+const otherPortfolios = ref([])
 const exchangeForm = ref({
   teachSkill: '',
   learnSkill: ''
@@ -149,6 +169,7 @@ async function selectConversation(userId) {
 
   const userRes = await authAPI.getUser(userId)
   currentUser.value = userRes.data
+  otherPortfolios.value = userRes.data.portfolios || []
 
   const [mySkills, otherSkills] = await Promise.all([
     skillAPI.getSkills({ userId: myId, type: 'teach' }),
@@ -156,6 +177,10 @@ async function selectConversation(userId) {
   ])
   myTeachSkills.value = mySkills.data
   otherTeachSkills.value = otherSkills.data
+}
+
+function openExchangeDialog() {
+  showExchangeDialog.value = true
 }
 
 async function loadMessages(userId) {
@@ -367,5 +392,81 @@ async function createExchange() {
 .chat-input-area {
   padding: 16px 24px;
   border-top: 1px solid #eee;
+}
+
+.exchange-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chat-portfolios {
+  padding: 16px;
+  background: #f5f7ff;
+  border-radius: 12px;
+  border: 1px dashed #c5cae9;
+}
+
+.chat-portfolios .subsection-title {
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.chat-portfolio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.chat-portfolio-item {
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+}
+
+.cp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.cp-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.cp-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #667eea;
+  margin-bottom: 4px;
+}
+
+.cp-link a {
+  color: #667eea;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 350px;
+}
+
+.cp-link a:hover {
+  text-decoration: underline;
+}
+
+.cp-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
 }
 </style>
